@@ -12,7 +12,7 @@ import {
 import { INDEX_KEYS, indexList, indexName, indexBlurb } from "./indexes.ts";
 import { STOCKS, BY_TICKER } from "./stocks.ts";
 import { RULES, SEASON } from "./rules.ts";
-import { SOURCE, QUOTE_FORMAT } from "./prices.ts";
+import { SOURCE, QUOTE_FORMAT, STALE_THRESHOLD_SEC } from "./prices.ts";
 import { skillMd } from "./skill.ts";
 import {
   homePage, liveFragment, agentPage, stockPage, stocksPage, tradesPage, rulesPage, agentsPage, notFound, indexesPage, indexPage, weekPage,
@@ -150,7 +150,7 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
       stocks: STOCKS.map((s) => {
         const q = t?.data[s.ticker];
         const priceAge = q ? nowSec - q[1] : null;
-        const isStale = s.h24 && q && q[3] === "b" && priceAge !== null && priceAge > 7200; // 2 hours
+        const isStale = s.h24 && q && q[3] === "b" && priceAge !== null && priceAge > STALE_THRESHOLD_SEC;
         const actualVenue = q?.[3] === "b" ? "the token's market on Base" : "the stock's US exchange";
         return {
           ticker: s.ticker, token: s.token, name: s.name, contract: s.contract,
