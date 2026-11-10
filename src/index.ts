@@ -347,10 +347,12 @@ async function handlePage(req: Request, env: Env, url: URL): Promise<Response> {
   }
   if (p === "/og/live.jpg") return ogImage(env);
 
-  if (p === "/") {
+  // /live is the home page at a second address: a link X has never cached (its card for
+  // the bare domain is from when stocks.now was parked for sale).
+  if (p === "/" || p === "/live") {
     const [b, fills, queued, society, c] = await Promise.all([loadBoard(env), recentFills(env, 25), recentQueued(env, 8), societyFeed(env), census(env)]);
     if (url.searchParams.get("fragment") === "live") return html(liveFragment(b, fills, queued, society, c), 200, "no-store");
-    return html(homePage(b, fills, queued, society, c));
+    return html(homePage(b, fills, queued, society, c, p));
   }
   const tick = await latestTick(env);
   if (p === "/stocks") return html(stocksPage(tick));

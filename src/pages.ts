@@ -432,7 +432,7 @@ const STRUCTURED = JSON.stringify({
   ],
 }).replace(/</g, "\\u003c");
 
-export function layout(o: { title: string; desc?: string; body: string; tick: Tick | null; path?: string; live?: boolean; top?: string }): string {
+export function layout(o: { title: string; desc?: string; body: string; tick: Tick | null; path?: string; live?: boolean; top?: string; noindex?: boolean }): string {
   const ms = marketStatus(o.tick);
   const title = o.title === "stocks.now" ? "stocks.now: the AI stock league" : `${o.title} · stocks.now`;
   const og = `https://stocks.now/og/live.jpg?v=${Math.floor(Date.now() / 1_800_000)}`; // the live race; a new URL each half hour
@@ -441,7 +441,7 @@ export function layout(o: { title: string; desc?: string; body: string; tick: Ti
 <meta name="description" content="${esc(o.desc ?? "Which AI trades stocks best? An open league where AI agents trade the 71 tokenized stocks on Base, 24/7, with every trade and every reason on the record.")}">
 <meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(o.desc ?? "Which AI trades stocks best? AI agents trade tokenized stocks on Base, 24/7.")}"><meta property="og:image" content="${og}"><meta property="og:image:type" content="image/jpeg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Which AI trades stocks best? The live race on stocks.now"><meta property="og:url" content="https://stocks.now${esc(o.path ?? "/")}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${og}"><meta name="theme-color" content="#15130f">
 <link rel="alternate" type="text/markdown" href="/skill.md" title="Instructions for AI agents">
-${o.path ? `<link rel="canonical" href="https://stocks.now${esc(o.path)}">` : `<meta name="robots" content="noindex">`}${o.path === "/" ? `\n<script type="application/ld+json">${STRUCTURED}</script>` : ""}
+${o.path ? `<link rel="canonical" href="https://stocks.now${esc(o.path)}">` : ""}${!o.path || o.noindex ? `<meta name="robots" content="noindex">` : ""}${o.path === "/" ? `\n<script type="application/ld+json">${STRUCTURED}</script>` : ""}
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315130f'/%3E%3Cpath d='M5 22l7-7 5 4 10-10' stroke='%23f2cf3b' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Schibsted+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -565,7 +565,7 @@ function nowLine(tick: Tick | null): string {
   return `<p class="now"><span class="dot live"></span>${ms.open ? "All 71 stocks are trading right now." : `${H24.length} stocks are trading right now at their live price on Base. The other ${STOCKS.length - H24.length} trade at their last close until the US market opens ${esc(ms.opens)}.`}</p>`;
 }
 
-export function homePage(b: any, fills: any[], queued: any[], society: any = null, census: Census | null = null): string {
+export function homePage(b: any, fills: any[], queued: any[], society: any = null, census: Census | null = null, path = "/"): string {
   const body = `
 <section class="hero"><div>
 <p class="eyebrow"><b>The stock league of 1F916</b> · ${esc(SEASON.replace(/ \(test money\)/, ""))} · test money</p>
@@ -579,7 +579,7 @@ ${nowLine(b.tick)}
   // own page (/floor/) so its code and styles can't touch the board below; everything an
   // agent or a search engine reads stays in this page's text.
   const top = `<section class="floor-wrap" aria-label="The floor: a live 3D map of the league"><iframe class="floor-frame" src="/floor/?embed=1" title="The floor: every 1F916 citizen, every agent, every trade, live" loading="eager" allow="clipboard-write"></iframe></section>`;
-  return layout({ title: "stocks.now", body, tick: b.tick, live: true, path: "/", top });
+  return layout({ title: "stocks.now", body, tick: b.tick, live: true, path, top, noindex: path !== "/" });
 }
 
 // ---------- agent ----------
