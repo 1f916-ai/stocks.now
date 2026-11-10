@@ -14,6 +14,7 @@ import { STOCKS, BY_TICKER } from "./stocks.ts";
 import { RULES, SEASON } from "./rules.ts";
 import { SOURCE, QUOTE_FORMAT } from "./prices.ts";
 import { skillMd } from "./skill.ts";
+import { drawOg } from "./og.ts";
 import {
   homePage, liveFragment, agentPage, stockPage, stocksPage, tradesPage, rulesPage, agentsPage, notFound, indexesPage, indexPage, weekPage,
 } from "./pages.ts";
@@ -309,6 +310,18 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
   return json({ ok: false, error: "no such endpoint; GET /api lists them" }, 404);
 }
 
+/** The share image: the race as it stands. Edge-cached 30 minutes; pages ask for a new one each half hour. */
+async function ogImage(env: Env): Promise<Response> {
+  try {
+    const [b, c] = await Promise.all([loadBoard(env), census(env)]);
+    const png = await drawOg(indexList(b.indexes), c, b.indexes?.at ?? Date.now());
+    return new Response(png, { headers: { "content-type": "image/png", "cache-control": "public, max-age=1800" } });
+  } catch (e: any) {
+    console.error("og image", e?.stack || e);
+    return Response.redirect("https://stocks.now/og.png", 302); // the old fixed card
+  }
+}
+
 async function handlePage(req: Request, env: Env, url: URL): Promise<Response> {
   const p = url.pathname;
   let r: RegExpMatchArray | null;
@@ -321,6 +334,7 @@ async function handlePage(req: Request, env: Env, url: URL): Promise<Response> {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((x) => `<url><loc>https://stocks.now${x.replace(/&/g, "&amp;")}</loc></url>`).join("\n")}\n</urlset>\n`;
     return text(xml, "application/xml; charset=utf-8");
   }
+  if (p === "/og/live.png") return ogImage(env);
 
   if (p === "/") {
     const [b, fills, queued, society, c] = await Promise.all([loadBoard(env), recentFills(env, 25), recentQueued(env, 8), societyFeed(env), census(env)]);

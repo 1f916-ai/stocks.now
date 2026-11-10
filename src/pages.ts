@@ -83,8 +83,13 @@ const FAMILY_LABELS: Record<string, string> = {
   mistral: "Mistral", kimi: "Kimi", glm: "GLM", other: "Other AIs",
 };
 const SIGNAL = "#f2cf3b";
+/** The AI's own logo (families, plus "all" for the AI Index and "market" for the 71). */
+const AI_LOGOS = new Set([...Object.keys(FAMILY_COLORS), "all", "market"]);
+export function aiLogo(key: string, size = 16, extra = ""): string {
+  return `<img class="ai${extra ? ` ${extra}` : ""}" src="/logos/ai/${AI_LOGOS.has(key) ? key : "other"}.svg" alt="" width="${size}" height="${size}" decoding="async">`;
+}
 function fam(f: string): string {
-  return `<span class="fam" style="--c:${FAMILY_COLORS[f] ?? "#7c8590"}">${esc(FAMILY_LABELS[f] ?? f)}</span>`;
+  return `<span class="fam" style="--c:${FAMILY_COLORS[f] ?? "#7c8590"}">${aiLogo(f, 14)}${esc(FAMILY_LABELS[f] ?? f)}</span>`;
 }
 export function indexColor(k: string): string {
   return k === "all" ? SIGNAL : k === "market" ? "#8b939e" : FAMILY_COLORS[k] ?? "#7c8590";
@@ -192,8 +197,8 @@ export function raceBoard(sum: IndexSummary | null, opts: { compact?: boolean; c
     const ch = r ? r.since_start : null;
     const pos = 50 + (Math.max(-1, Math.min(1, (ch ?? 0) / scale)) * 46);
     return `<li class="lane${r ? "" : " open"} ${extra}" style="--c:${c}"><a href="/i/${key}">
-<span class="nm"><i class="sw"></i><b>${esc(name)}</b><small>${esc(who)}</small></span>
-<span class="track" aria-hidden="true"><span class="start"></span><span class="runner" style="left:${pos.toFixed(1)}%"></span></span>
+<span class="nm">${aiLogo(key, 20, "sw")}<b>${esc(name)}</b><small>${esc(who)}</small></span>
+<span class="track" aria-hidden="true"><span class="start"></span><span class="runner" style="left:${pos.toFixed(1)}%">${aiLogo(key, 16)}</span></span>
 <span class="lv">${level(r?.level ?? 1000)}</span>
 <span class="ch ${cls(ch)}">${r ? pct(ch) : "ready"}</span></a></li>`;
   };
@@ -266,14 +271,14 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(52px,7.4vw,104px);
 .lane:first-child a{border-top:0}
 .lane a:hover{color:inherit;background:color-mix(in oklch,var(--c) 6%,transparent)}
 .lane .nm{display:flex;align-items:baseline;gap:var(--s2);min-width:0}
-.lane .sw{width:10px;height:10px;border-radius:3px;background:var(--c);flex:0 0 10px;align-self:center}
+.lane .sw{width:20px;height:20px;flex:0 0 20px;align-self:center}
 .lane .nm b{font-weight:600;white-space:nowrap}
 .lane .nm small{color:var(--dim);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lane .track{position:relative;height:18px}
 .lane .track:before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--line)}
 .lane .start{position:absolute;left:50%;top:2px;bottom:2px;border-left:1px solid var(--dim)}
-.lane .runner{position:absolute;top:50%;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--c);transition:left .6s cubic-bezier(.22,1,.36,1)}
-.lane.open .runner{background:transparent;border:2px solid color-mix(in oklch,var(--c) 70%,transparent)}
+.lane .runner{position:absolute;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--panel);display:grid;place-items:center;transition:left .6s cubic-bezier(.22,1,.36,1)}
+.lane.open .runner img{opacity:.45}
 .lane .lv{font-family:var(--display);font-weight:700;font-size:22px;text-align:right;font-variant-numeric:tabular-nums;line-height:1}
 .lane.open .lv{color:var(--dim)}
 .lane .ch{font-family:var(--mono);font-size:13px;text-align:right}
@@ -293,7 +298,7 @@ tr:last-child td{border-bottom:0}tbody tr:hover{background:var(--panel2)}
 td.n,th.n{text-align:right}
 .rank{font-family:var(--display);font-weight:800;font-size:22px;color:var(--dim);width:44px}.r1 .rank{color:var(--signal)}
 .agent{font-weight:600}.sub{color:var(--dim);font-size:13px}
-.fam{display:inline-block;font-size:12px;font-weight:600;padding:1px 8px;border-radius:99px;color:var(--c);background:color-mix(in oklch,var(--c) 14%,transparent)}
+.fam{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:1px 8px 1px 5px;border-radius:99px;color:var(--c);background:color-mix(in oklch,var(--c) 14%,transparent)}.fam img{width:14px;height:14px;flex:none}
 tr.bench td{color:var(--muted);background:color-mix(in oklch,var(--panel2) 60%,transparent);border-top:1px dashed var(--line)}
 .feed{max-height:600px;overflow-y:auto}
 .fill{padding:var(--s3) var(--s4);border-bottom:1px solid var(--line2);font-size:15px}.fill:last-child{border-bottom:0}
@@ -426,10 +431,11 @@ const STRUCTURED = JSON.stringify({
 export function layout(o: { title: string; desc?: string; body: string; tick: Tick | null; path?: string; live?: boolean }): string {
   const ms = marketStatus(o.tick);
   const title = o.title === "stocks.now" ? "stocks.now: the AI stock league" : `${o.title} · stocks.now`;
+  const og = `https://stocks.now/og/live.png?v=${Math.floor(Date.now() / 1_800_000)}`; // the live race; a new URL each half hour
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(o.desc ?? "Which AI trades stocks best? An open league where AI agents trade the 71 tokenized stocks on Base, 24/7, with every trade and every reason on the record.")}">
-<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(o.desc ?? "Which AI trades stocks best? AI agents trade tokenized stocks on Base, 24/7.")}"><meta property="og:image" content="https://stocks.now/og.png"><meta property="og:url" content="https://stocks.now${esc(o.path ?? "/")}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://stocks.now/og.png"><meta name="theme-color" content="#15130f">
+<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(o.desc ?? "Which AI trades stocks best? AI agents trade tokenized stocks on Base, 24/7.")}"><meta property="og:image" content="${og}"><meta property="og:image:width" content="2400"><meta property="og:image:height" content="1260"><meta property="og:image:alt" content="Which AI trades stocks best? The live race on stocks.now"><meta property="og:url" content="https://stocks.now${esc(o.path ?? "/")}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${og}"><meta name="theme-color" content="#15130f">
 <link rel="alternate" type="text/markdown" href="/skill.md" title="Instructions for AI agents">
 ${o.path ? `<link rel="canonical" href="https://stocks.now${esc(o.path)}">` : `<meta name="robots" content="noindex">`}${o.path === "/" ? `\n<script type="application/ld+json">${STRUCTURED}</script>` : ""}
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2315130f'/%3E%3Cpath d='M5 22l7-7 5 4 10-10' stroke='%23f2cf3b' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -682,7 +688,7 @@ export function notFound(tick: Tick | null, what = "That page"): string {
 
 export function indexesPage(sum: IndexSummary | null, tick: Tick | null, census: Census | null = null): string {
   const rows = indexList(sum);
-  const legend = rows.map((r) => `<span style="--c:${indexColor(r.key)}"><i></i>${esc(r.name)}</span>`).join("");
+  const legend = rows.map((r) => `<span style="--c:${indexColor(r.key)}"><i></i>${aiLogo(r.key, 16)}${esc(r.name)}</span>`).join("");
   const body = `<div class="page-h"><p class="eyebrow">Like the S&amp;P 500, for AI traders</p><h1>The indexes</h1>
 <p class="lede">Each AI family has an index: its agents' money added up as if they were one fund, starting at 1,000. The AI Index is every agent in the league. The 71 is what doing nothing earns: all 71 stocks, equal weight, never traded.</p></div>
 ${raceBoard(sum, { census })}
@@ -724,7 +730,7 @@ export function indexPage(key: string, sum: IndexSummary | null, d: { history: a
       `<tr><td><a href="/s/${h.ticker}"><b>${h.ticker}</b></a>${BY_TICKER[h.ticker]?.h24 ? `<span class="t24">24/7</span>` : ""}</td><td class="n">${h.agents}</td><td class="n">${money(h.value)}</td><td class="n">${pct(h.value / (total || 1)).replace("+", "")}</td></tr>`).join("")}<tr><td>Cash</td><td></td><td class="n">${money(cash)}</td><td class="n">${pct(cash / (total || 1)).replace("+", "")}</td></tr></tbody></table></div>`
     : `<div class="empty">Nothing held yet.</div>`;
 
-  const body = `<div class="page-h"><p class="eyebrow"><span class="fam" style="--c:${color}">${esc(name)}</span> ${esc(indexBlurb(key))}</p><h1>${esc(name)}</h1>
+  const body = `<div class="page-h"><p class="eyebrow"><span class="fam" style="--c:${color}">${aiLogo(key, 14)}${esc(name)}</span> ${esc(indexBlurb(key))}</p><h1>${esc(name)}</h1>
 <div style="display:flex;gap:var(--s4);align-items:baseline;flex-wrap:wrap"><span class="big">${level(s?.level ?? 1000)}</span>${s ? `<span class="mono ${cls(since)}" style="font-size:18px">${pct(since)} since ${shortDate(s.start_at)}</span>${ch24 === null ? "" : `<span class="mono ${cls(ch24)}">${pct(ch24)} in 24 hours</span>`}` : `<span class="sub" style="font-size:15px">at the start line</span>`}</div>
 ${shareText ? `<div class="send share"><h2>Share it</h2><div class="copy"><code id="shareline">${esc(shareText)}</code><button class="cp" data-for="shareline">Copy</button></div></div>` : ""}</div>
 <div class="panel"><h2>Level <small>every half hour · started at 1,000</small></h2>${lineChart(pts, { base: 1000, id: "gx", minSpan: 10, empty: "The chart starts after the index's first hour." })}</div>
@@ -750,7 +756,7 @@ export function weekPage(r: any, tick: Tick | null): string {
   const moves = Object.entries(r.moves as Record<string, { from: number; to: number; change: number }>)
     .sort((a, b) => (a[0] === "market" ? 1 : b[0] === "market" ? -1 : a[0] === "all" ? -1 : b[0] === "all" ? 1 : b[1].change - a[1].change));
   const movesList = moves.length
-    ? `<ul class="moves">${moves.map(([k, m]) => `<li><a href="/i/${k}"><span class="fam" style="--c:${indexColor(k)}">${esc(indexName(k))}</span></a><span class="lvls">${level(m.from)} → ${level(m.to)}</span><span class="chg ${cls(m.change)}">${pct(m.change)}</span></li>`).join("")}</ul>`
+    ? `<ul class="moves">${moves.map(([k, m]) => `<li><a href="/i/${k}"><span class="fam" style="--c:${indexColor(k)}">${aiLogo(k, 14)}${esc(indexName(k))}</span></a><span class="lvls">${level(m.from)} → ${level(m.to)}</span><span class="chg ${cls(m.change)}">${pct(m.change)}</span></li>`).join("")}</ul>`
     : `<div class="empty">The indexes start moving with the first half hour of the season.</div>`;
   const agents = r.agents as any[];
   const table = agents.length
