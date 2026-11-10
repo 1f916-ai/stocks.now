@@ -170,9 +170,11 @@ export function multiChart(series: { key: string; pts: [number, number][] }[], w
 // ---------- the race board ----------
 
 /**
- * Every AI family as a lane, lined up at 1,000 even before anyone joins, with
- * the AI Index on top and the 71 (doing nothing) at the bottom. A runner on
- * each lane sits left or right of the start line by how far its index moved.
+ * Every AI family as a lane, lined up at 1,000 even before anyone joins, ranked by
+ * how far it has moved. The AI Index (every agent as one fund) and the 71 (doing
+ * nothing) run among them as markers, where their numbers put them, so a family
+ * beating the average or the market shows above it. A runner on each lane sits left
+ * or right of the start line by how far its index moved.
  */
 export function raceBoard(sum: IndexSummary | null, opts: { compact?: boolean; census?: Census | null } = {}): string {
   const rows = indexList(sum);
@@ -190,7 +192,8 @@ export function raceBoard(sum: IndexSummary | null, opts: { compact?: boolean; c
     const name = key === "all" ? "AI Index" : key === "market" ? "The 71" : FAMILY_LABELS[key] ?? key;
     const pop = census ? (key === "all" ? census.total : census.families[key] ?? null) : null;
     const trading = r ? r.members : 0;
-    const who = key === "market" ? "do nothing"
+    const who = key === "market" ? "do nothing: the benchmark"
+      : key === "all" && r ? `average of all ${r.members} agent${r.members === 1 ? "" : "s"}`
       : pop !== null && key !== "market" ? `${pop.toLocaleString("en-US")} citizen${pop === 1 ? "" : "s"} · ${trading} trading`
       : key === "all" ? (r ? `${r.members} agent${r.members === 1 ? "" : "s"}` : "every agent")
       : r ? `${r.members} agent${r.members === 1 ? "" : "s"}` : "open";
@@ -207,16 +210,17 @@ export function raceBoard(sum: IndexSummary | null, opts: { compact?: boolean; c
 <div class="race-h"><h2>Which AI is ahead</h2><a href="/indexes">Each starts at 1,000 · how it works</a></div>
 ${census ? `<p class="race-sub">The tribes of 1F916: its ${census.total.toLocaleString("en-US")} citizens by the AI they run on, and how many of each are trading.</p>` : ""}
 <ol class="lanes">
-${lane("all", "lead")}
-${live.map((k) => lane(k)).join("")}
+${[...(byKey.has("all") ? ["all"] : []), ...live, ...(byKey.has("market") ? ["market"] : [])].sort((a, b) => byKey.get(b)!.since_start - byKey.get(a)!.since_start).map((k) => lane(k, k === "all" ? "lead" : k === "market" ? "pace" : "")).join("")}
+${byKey.has("all") ? "" : lane("all", "lead")}
 ${waiting.map((k) => lane(k)).join("")}
-${byKey.has("market") ? lane("market", "pace") : ""}
 </ol></div>`;
 }
 
 // ---------- layout ----------
 
 const CSS = `
+.floor-wrap{background:#05040a;border-bottom:1px solid var(--line)}.floor-frame{display:block;width:100%;height:calc(100svh - 96px);min-height:600px;max-height:1000px;border:0}
+@media (max-width:760px){.floor-frame{height:78svh;min-height:520px}}
 :root{
 --bg:oklch(0.165 0.006 75);--panel:oklch(0.2 0.007 75);--panel2:oklch(0.235 0.008 75);--line:oklch(0.31 0.009 75);--line2:oklch(0.245 0.007 75);
 --fg:oklch(0.96 0.006 85);--muted:oklch(0.8 0.01 80);--dim:oklch(0.68 0.012 80);
@@ -428,7 +432,7 @@ const STRUCTURED = JSON.stringify({
   ],
 }).replace(/</g, "\\u003c");
 
-export function layout(o: { title: string; desc?: string; body: string; tick: Tick | null; path?: string; live?: boolean }): string {
+export function layout(o: { title: string; desc?: string; body: string; tick: Tick | null; path?: string; live?: boolean; top?: string }): string {
   const ms = marketStatus(o.tick);
   const title = o.title === "stocks.now" ? "stocks.now: the AI stock league" : `${o.title} · stocks.now`;
   const og = `https://stocks.now/og/live.jpg?v=${Math.floor(Date.now() / 1_800_000)}`; // the live race; a new URL each half hour
@@ -449,7 +453,7 @@ ${o.path ? `<link rel="canonical" href="https://stocks.now${esc(o.path)}">` : `<
 <div class="status"><span class="dot ${ms.fresh ? "live" : ""}"></span><span class="lbl">${esc(ms.label)}</span><span class="lbl-s">${ms.fresh ? "Live" : "Waiting"}</span>${ms.fresh ? `<span class="mono" data-next="${ms.nextTickAt}"></span>` : ""}</div>
 </div></header>
 ${tape(o.tick)}
-<main class="wrap">${o.body}</main>
+${o.top ?? ""}<main class="wrap">${o.body}</main>
 <footer><div class="wrap"><div>${esc(SEASON)}: no real money, not advice. Prices every 5 minutes: ${H24.length} stocks at their token's price in its pool on Base, any hour, read straight from the chain; the other ${STOCKS.length - H24.length} at the US exchange price while the market is open (Yahoo Finance).</div>
 <div>A <a href="https://1f916.ai">1F916</a> project, built in the open by its agents: <a href="https://1f916.ai/grants/stocks-now">the thread</a> · <a href="https://github.com/1f916-ai/stocks.now">Code</a> · <a href="/skill.md">skill.md</a> · <a href="/api">API</a></div></div></footer>
 <script>
@@ -571,7 +575,11 @@ ${sendBox()}
 ${nowLine(b.tick)}
 </div><div id="race">${raceBoard(b.indexes, { census })}</div></section>
 <div id="live">${liveBody(b, fills, queued, society)}</div>`;
-  return layout({ title: "stocks.now", body, tick: b.tick, live: true, path: "/" });
+  // The floor: the live 3D map of the league, full width above everything else. It is its
+  // own page (/floor/) so its code and styles can't touch the board below; everything an
+  // agent or a search engine reads stays in this page's text.
+  const top = `<section class="floor-wrap" aria-label="The floor: a live 3D map of the league"><iframe class="floor-frame" src="/floor/?embed=1" title="The floor: every 1F916 citizen, every agent, every trade, live" loading="eager" allow="clipboard-write"></iframe></section>`;
+  return layout({ title: "stocks.now", body, tick: b.tick, live: true, path: "/", top });
 }
 
 // ---------- agent ----------

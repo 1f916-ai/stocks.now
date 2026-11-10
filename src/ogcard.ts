@@ -26,12 +26,14 @@ const level = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 
 const pct = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(2)}%`;
 const svgUri = (svg: string) => `data:image/svg+xml;base64,${btoa(svg)}`;
 
-/** The rows: the AI Index (every agent as one fund) and the 71 (doing nothing) are reference
- *  lines; between them, only the families that trade, ranked best first. */
+/** The rows, best first by where each stands: the families that trade (ranked), with the
+ *  AI Index (the average of every agent) and the 71 (doing nothing) among them as markers. */
 export function ogRows(rows: OgRow[]) {
   const by = new Map(rows.map((r) => [r.key, r]));
-  const ranked = OG_FAMILIES.filter((f) => by.has(f)).map((f) => by.get(f)!).sort((a, b) => b.since_start - a.since_start).slice(0, MAX_RANKED);
-  return { index: by.get("all") ?? null, ranked, market: by.get("market") ?? null };
+  const fams = OG_FAMILIES.filter((f) => by.has(f)).map((f) => by.get(f)!).sort((a, b) => b.since_start - a.since_start).slice(0, MAX_RANKED);
+  const all = [...fams, ...["all", "market"].filter((k) => by.has(k)).map((k) => by.get(k)!)].sort((a, b) => b.since_start - a.since_start);
+  let n = 0;
+  return all.map((r) => ({ r, rank: r.key === "all" || r.key === "market" ? null : ++n }));
 }
 
 /** "Nov 10, 8:30 am ET" */
@@ -53,14 +55,14 @@ function spark(r: OgRow, color: string, w: number, hgt: number, span: number): E
 }
 
 export function ogTree(rows: OgRow[], census: OgCensus | null, at: number, logos: Record<string, string>, backdrop: string | null, agents: number | null): El {
-  const { index, ranked, market } = ogRows(rows);
+  const shown = ogRows(rows);
   const span = Math.max(0.01, ...rows.flatMap((r) => (r.hist ?? []).map(([, l]) => Math.abs(l / 1000 - 1))));
   const logo = (k: string, s: number) => ({ type: "img", props: { src: svgUri(logos[k] ?? logos.other), width: s, height: s } });
 
   const row = (r: OgRow, rank: number | null, sub: string | null) => {
     const ref = rank === null, ch = r.since_start, col = ch > 0 ? C.up : ch < 0 ? C.down : C.muted;
     // reference rows (no rank) give the sparkline's room to their label
-    return h("div", { alignItems: "center", height: ref ? 50 : 44, gap: 10 },
+    return h("div", { alignItems: "center", height: ref ? 48 : 42, gap: 10, ...(ref ? { backgroundColor: "rgba(255,255,255,0.045)", borderRadius: 8, margin: "2px -8px", padding: "0 8px" } : {}) },
       h("span", { width: 14, justifyContent: "flex-end", fontFamily: "Mono", fontWeight: 600, fontSize: 15, color: C.dim }, rank === null ? "" : String(rank)),
       logo(r.key, 24),
       h("div", { width: ref ? 192 : 104, flexDirection: "column" },
@@ -70,7 +72,6 @@ export function ogTree(rows: OgRow[], census: OgCensus | null, at: number, logos
       h("span", { flex: 1, justifyContent: "flex-end", fontFamily: "BigShoulders", fontWeight: 800, fontSize: 28, color: r.key === "all" ? C.signal : C.fg }, level(r.level)),
       h("span", { width: 82, justifyContent: "flex-end", fontFamily: "Mono", fontWeight: 600, fontSize: 16, color: col }, pct(ch)));
   };
-  const sep = () => h("div", { height: 0, borderTop: `1px dashed ${C.line}`, margin: "5px 0" });
 
   const citizens = census?.total;
   return h("div", { width: 1200, height: 630, position: "relative", backgroundColor: "#05040a", color: C.fg },
@@ -89,7 +90,5 @@ export function ogTree(rows: OgRow[], census: OgCensus | null, at: number, logos
       h("div", { justifyContent: "space-between", alignItems: "baseline", paddingBottom: 8, borderBottom: `1px solid ${C.line}`, marginBottom: 4 },
         h("span", { fontFamily: "Mono", fontWeight: 600, fontSize: 14, letterSpacing: 1.6, color: C.muted }, "WHICH AI IS AHEAD"),
         h("span", { fontFamily: "Mono", fontWeight: 600, fontSize: 13, color: C.signal }, `LIVE · ${nyStamp(at)}`)),
-      ...(index ? [row(index, null, `all ${agents ?? index.members} agents, one fund`), sep()] : []),
-      ...ranked.map((r, i) => row(r, i + 1, null)),
-      ...(market ? [sep(), row(market, null, "equal weight, never traded")] : [])));
+      ...shown.map(({ r, rank }) => row(r, rank, r.key === "all" ? `average of all ${agents ?? r.members} agents` : r.key === "market" ? "benchmark: hold all 71" : null))));
 }

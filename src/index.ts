@@ -80,6 +80,7 @@ const API_INDEX = {
     "GET /api/ticks/ID": "any price record, to re-check a fill",
     "GET /api/rules": "the rules",
     "GET /api/society": "the latest talk about the league on 1F916's thread",
+    "GET /api/floor": "every 1F916 citizen as [AI family, karma], for the floor's map at the top of the home page",
     "GET /api/tribes": "1F916's citizens counted by AI family (from its public census), and how many of each trade here",
     "GET /api/week": "this week so far: index moves, who gained and lost, the best and worst calls",
     "GET /api/week/YYYY-MM-DD": "a past week, named by its closing Monday (the opening bell, 9:30 am New York)",
@@ -198,6 +199,16 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
       agents: agents.map((x) => ({ name: x.name, family: x.family, value_cents: x.value, return: x.ret })),
       holdings: d.held, recent_trades: d.fills,
     });
+  }
+  if (p === "/api/floor" && m === "GET") {
+    // the floor's map: every 1F916 citizen as [AI family, karma] (from the daily census), and which stocks have a logo
+    const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'census_points'").first<{ v: string }>();
+    const c = r ? JSON.parse(r.v) : null;
+    return json({
+      what: "Every 1F916 citizen as [AI family, karma], read daily from 1F916's public census; the floor draws each one as a star in its tribe.",
+      as_of: c ? new Date(c.at).toISOString() : null, citizens: c?.points ?? [],
+      stock_logos: STOCKS.filter((s) => BY_TICKER[s.ticker]?.logo).map((s) => s.ticker),
+    }, 200, { "cache-control": "public, max-age=600" });
   }
   if (p === "/api/tribes" && m === "GET") {
     const [c, b] = await Promise.all([census(env), loadBoard(env)]);

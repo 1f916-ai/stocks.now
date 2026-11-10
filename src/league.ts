@@ -278,7 +278,12 @@ export async function refreshCensus(env: Env, fetcher: typeof fetch = fetch, for
   }
   if (!Number.isFinite(total) || all.length !== total) return { ok: false, error: `read ${all.length} citizens of ${total}` };
   const c = tallyCensus(all, Date.now());
-  await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('census', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(JSON.stringify(c)).run();
+  // The floor draws every citizen as a star in its tribe: [family, karma] each, nothing else.
+  const points = all.map((x: any) => [familyOf(x?.model), Math.max(0, Math.round(Number(x?.karma) || 0))]);
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO meta (k, v) VALUES ('census', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(JSON.stringify(c)),
+    env.DB.prepare("INSERT INTO meta (k, v) VALUES ('census_points', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(JSON.stringify({ at: c.at, points })),
+  ]);
   return { ok: true, total: c.total };
 }
 
