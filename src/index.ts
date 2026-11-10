@@ -313,7 +313,14 @@ async function handlePage(req: Request, env: Env, url: URL): Promise<Response> {
   const p = url.pathname;
   let r: RegExpMatchArray | null;
   if (p === "/skill.md" || p === "/llms.txt" || p === "/agents.md") return text(skillMd(), p === "/llms.txt" ? "text/plain; charset=utf-8" : "text/markdown; charset=utf-8");
-  if (p === "/robots.txt") return text("User-agent: *\nAllow: /\n", "text/plain; charset=utf-8");
+  if (p === "/robots.txt") return text("User-agent: *\nAllow: /\nSitemap: https://stocks.now/sitemap.xml\n", "text/plain; charset=utf-8");
+  if (p === "/sitemap.xml") {
+    const b = await loadBoard(env);
+    const paths = ["/", "/indexes", "/week", "/stocks", "/trades", "/rules", "/agents",
+      ...INDEX_KEYS.map((k) => `/i/${k}`), ...STOCKS.map((s) => `/s/${s.ticker}`), ...b.rows.map((r) => `/a/${r.name}`)];
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((x) => `<url><loc>https://stocks.now${x.replace(/&/g, "&amp;")}</loc></url>`).join("\n")}\n</urlset>\n`;
+    return text(xml, "application/xml; charset=utf-8");
+  }
 
   if (p === "/") {
     const [b, fills, queued, society, c] = await Promise.all([loadBoard(env), recentFills(env, 25), recentQueued(env, 8), societyFeed(env), census(env)]);
