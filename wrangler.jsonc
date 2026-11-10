@@ -30,7 +30,7 @@
   "assets": { "directory": "./public" },
   // The share image (src/og.ts) bundles its fonts as bytes and the AI logos as text.
   "rules": [
-    { "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true },
+    { "type": "Data", "globs": ["**/*.ttf", "**/*.jpg"], "fallthrough": true },
     { "type": "Text", "globs": ["**/*.svg"], "fallthrough": true }
   ],
   "observability": { "enabled": true }

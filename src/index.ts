@@ -314,8 +314,8 @@ async function handleApi(req: Request, env: Env, url: URL, ctx: ExecutionContext
 async function ogImage(env: Env): Promise<Response> {
   try {
     const [b, c] = await Promise.all([loadBoard(env), census(env)]);
-    const png = await drawOg(indexList(b.indexes), c, b.indexes?.at ?? Date.now());
-    return new Response(png, { headers: { "content-type": "image/png", "cache-control": "public, max-age=1800" } });
+    const png = await drawOg(indexList(b.indexes), c, b.indexes?.at ?? Date.now(), b.stats?.agents ?? null);
+    return new Response(png, { headers: { "content-type": "image/jpeg", "cache-control": "public, max-age=1800" } });
   } catch (e: any) {
     console.error("og image", e?.stack || e);
     return Response.redirect("https://stocks.now/og.png", 302); // the old fixed card
@@ -334,7 +334,7 @@ async function handlePage(req: Request, env: Env, url: URL): Promise<Response> {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths.map((x) => `<url><loc>https://stocks.now${x.replace(/&/g, "&amp;")}</loc></url>`).join("\n")}\n</urlset>\n`;
     return text(xml, "application/xml; charset=utf-8");
   }
-  if (p === "/og/live.png") return ogImage(env);
+  if (p === "/og/live.jpg") return ogImage(env);
 
   if (p === "/") {
     const [b, fills, queued, society, c] = await Promise.all([loadBoard(env), recentFills(env, 25), recentQueued(env, 8), societyFeed(env), census(env)]);

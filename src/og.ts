@@ -6,6 +6,8 @@ import satori, { init } from "satori/standalone";
 import layoutWasm from "satori/yoga.wasm";
 import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
+import encodeJpeg, { init as initJpeg } from "@jsquash/jpeg/encode.js";
+import jpegWasm from "@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm";
 import bigShoulders from "./fonts/BigShoulders-800.ttf";
 import schibsted600 from "./fonts/Schibsted-600.ttf";
 import schibsted400 from "./fonts/Schibsted-400.ttf";
@@ -23,8 +25,17 @@ import glm from "../public/logos/ai/glm.svg";
 import other from "../public/logos/ai/other.svg";
 import all from "../public/logos/ai/all.svg";
 import market from "../public/logos/ai/market.svg";
+import backdropJpg from "./og-backdrop.jpg";
 import { ogTree, type OgRow, type OgCensus } from "./ogcard.ts";
 
+// The floor's society as a still (rendered from the 3D floor), as a data URI once per isolate.
+let backdrop: string | null = null;
+function backdropUri(): string {
+  if (backdrop) return backdrop;
+  const b = new Uint8Array(backdropJpg); let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return (backdrop = "data:image/jpeg;base64," + btoa(s));
+}
 const LOGOS: Record<string, string> = { claude, gpt, gemini, grok, llama, deepseek, qwen, mistral, kimi, glm, other, all, market };
 const FONTS = [
   { name: "BigShoulders", data: bigShoulders, weight: 800 as const, style: "normal" as const },
@@ -36,13 +47,15 @@ const FONTS = [
 // Each wasm module starts once per isolate; a failed start is retried on the next request.
 let ready: Promise<void> | null = null;
 function boot(): Promise<void> {
-  ready ??= Promise.all([init(layoutWasm), initWasm(resvgWasm)]).then(() => undefined, (e) => { ready = null; throw e; });
+  ready ??= Promise.all([init(layoutWasm), initWasm(resvgWasm), initJpeg(jpegWasm)]).then(() => undefined, (e) => { ready = null; throw e; });
   return ready;
 }
 
-/** The race as a PNG, 2400 x 1260 (twice 1200 x 630, sharp on phones). */
-export async function drawOg(rows: OgRow[], census: OgCensus | null, at: number): Promise<Uint8Array> {
+/** The race as a JPEG, 1200 x 630: about 100 KB, small enough for every app's link preview
+ *  (WhatsApp skips large ones; the backdrop makes a PNG five times bigger). */
+export async function drawOg(rows: OgRow[], census: OgCensus | null, at: number, agents: number | null): Promise<ArrayBuffer> {
   await boot();
-  const svg = await satori(ogTree(rows, census, at, LOGOS) as any, { width: 1200, height: 630, fonts: FONTS });
-  return new Resvg(svg, { fitTo: { mode: "width", value: 2400 } }).render().asPng();
+  const svg = await satori(ogTree(rows, census, at, LOGOS, backdropUri(), agents) as any, { width: 1200, height: 630, fonts: FONTS });
+  const img = new Resvg(svg, { fitTo: { mode: "width", value: 1200 } }).render();
+  return encodeJpeg({ data: new Uint8ClampedArray(img.pixels), width: img.width, height: img.height, colorSpace: "srgb" } as ImageData, { quality: 86 });
 }

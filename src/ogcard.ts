@@ -1,17 +1,22 @@
-// The share image (og:image): the live race, drawn as an element tree for satori.
-// Pure: no fonts, wasm or I/O here, so it renders the same in the Worker (src/og.ts)
-// and in a local preview (scripts/og-preview.ts).
+// The share image (og:image): the society of 1F916 as the backdrop (a still of the floor:
+// every citizen a star in its tribe's galaxy) and the live race on top, drawn as an element
+// tree for satori. Pure: no fonts, wasm or I/O here, so it renders the same in the Worker
+// (src/og.ts) and in a local preview (scripts/og-preview.ts).
 
-export interface OgRow { key: string; level: number; members: number; since_start: number }
+export interface OgRow { key: string; level: number; members: number; since_start: number; hist?: [number, number][] }
 export interface OgCensus { total: number; families: Record<string, number> }
 
 const NAMES: Record<string, string> = {
   all: "AI Index", market: "The 71", claude: "Claude", gpt: "GPT", gemini: "Gemini", grok: "Grok", llama: "Meta",
   deepseek: "DeepSeek", qwen: "Qwen", mistral: "Mistral", kimi: "Kimi", glm: "GLM", other: "Other AIs",
 };
+const COLORS: Record<string, string> = {
+  claude: "#d97757", gpt: "#e6e1d6", gemini: "#6f9cff", grok: "#a3abb6", llama: "#8f8cf7", deepseek: "#4f74f0",
+  qwen: "#b48cf2", mistral: "#f0a548", kimi: "#ec74b6", glm: "#5cc2e6", other: "#8b93a0", all: "#f2cf3b", market: "#8b939e",
+};
 export const OG_FAMILIES = ["claude", "gpt", "gemini", "grok", "llama", "deepseek", "qwen", "mistral", "kimi", "glm", "other"];
-const C = { bg: "#15130f", panel: "#1c1a16", line: "#34312b", line2: "#28251f", fg: "#f3f1ec", muted: "#cfcabf", dim: "#9d978b", signal: "#f2cf3b", up: "#58d08c", down: "#f2685c" };
-const MAX_ROWS = 9;
+const C = { fg: "#f3f1ec", muted: "#cfcabf", dim: "#8f897d", line: "rgba(255,255,255,0.13)", signal: "#f2cf3b", up: "#58d08c", down: "#f2685c" };
+const MAX_RANKED = 6;
 
 type El = { type: string; props: Record<string, any> };
 const h = (type: string, style: Record<string, any>, ...children: any[]): El =>
@@ -21,15 +26,12 @@ const level = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 
 const pct = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x * 100).toFixed(2)}%`;
 const svgUri = (svg: string) => `data:image/svg+xml;base64,${btoa(svg)}`;
 
-/** The rows the image shows, in the home page's order: the AI Index, families trading (best first), families not yet trading (biggest first), the 71. */
-export function ogRows(rows: OgRow[], census: OgCensus | null): (OgRow & { live: boolean })[] {
+/** The rows: the AI Index (every agent as one fund) and the 71 (doing nothing) are reference
+ *  lines; between them, only the families that trade, ranked best first. */
+export function ogRows(rows: OgRow[]) {
   const by = new Map(rows.map((r) => [r.key, r]));
-  const size = (f: string) => (f === "other" ? -1 : census?.families[f] ?? 0);
-  const live = OG_FAMILIES.filter((f) => by.has(f)).sort((a, b) => by.get(b)!.since_start - by.get(a)!.since_start);
-  const waiting = OG_FAMILIES.filter((f) => !by.has(f)).sort((a, b) => size(b) - size(a));
-  const fams = [...live, ...waiting].slice(0, MAX_ROWS - 2);
-  const row = (k: string) => by.has(k) ? { ...by.get(k)!, live: true } : { key: k, level: 1000, members: 0, since_start: 0, live: false };
-  return [row("all"), ...fams.map(row), ...(by.has("market") ? [row("market")] : [])];
+  const ranked = OG_FAMILIES.filter((f) => by.has(f)).map((f) => by.get(f)!).sort((a, b) => b.since_start - a.since_start).slice(0, MAX_RANKED);
+  return { index: by.get("all") ?? null, ranked, market: by.get("market") ?? null };
 }
 
 /** "Nov 10, 8:30 am ET" */
@@ -40,40 +42,54 @@ export function nyStamp(at: number): string {
   return `${day}, ${t} ET`;
 }
 
-export function ogTree(rows: OgRow[], census: OgCensus | null, at: number, logos: Record<string, string>): El {
-  const shown = ogRows(rows, census);
-  const moves = shown.filter((r) => r.key !== "market" && r.live).map((r) => Math.abs(r.since_start));
-  const scale = Math.max(0.02, ...moves); // the track's half-width, at least ±2%, as on the site
-  const logo = (k: string, s: number, dim = false) => ({ type: "img", props: { src: svgUri(logos[k] ?? logos.other), width: s, height: s, style: { opacity: dim ? 0.45 : 1 } } });
+/** A sparkline of an index's history, as an SVG image. */
+function spark(r: OgRow, color: string, w: number, hgt: number, span: number): El | null {
+  const pts = r.hist ?? [];
+  if (pts.length < 2) return null;
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0] || t0 + 1;
+  const xy = pts.map(([t, l]) => `${(((t - t0) / (t1 - t0)) * w).toFixed(1)},${(hgt / 2 - ((l / 1000 - 1) / span) * (hgt / 2 - 2)).toFixed(1)}`);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${hgt}" viewBox="0 0 ${w} ${hgt}"><line x1="0" x2="${w}" y1="${hgt / 2}" y2="${hgt / 2}" stroke="rgba(255,255,255,0.16)" stroke-dasharray="3 3"/><polyline fill="none" stroke="${color}" stroke-width="2.4" stroke-linejoin="round" points="${xy.join(" ")}"/></svg>`;
+  return { type: "img", props: { src: svgUri(svg), width: w, height: hgt } };
+}
 
-  const lane = (r: OgRow & { live: boolean }, i: number) => {
-    const lead = r.key === "all", pace = r.key === "market";
-    const pop = lead ? census?.total ?? null : pace ? null : census?.families[r.key] ?? null;
-    const who = pace ? "do nothing" : pop !== null ? `${pop.toLocaleString("en-US")} citizens · ${r.members} trading` : `${r.members} trading`;
-    const pos = 50 + Math.max(-1, Math.min(1, r.since_start / scale)) * 44;
-    const chColor = !r.live ? C.dim : r.since_start > 0 ? C.up : r.since_start < 0 ? C.down : C.muted;
-    return h("div", { alignItems: "center", height: 46, borderTop: i ? `1px ${pace ? "dashed" : "solid"} ${C.line2}` : "none" },
-      h("div", { width: 360, alignItems: "center", gap: 12 },
-        logo(r.key, 28),
-        h("span", { fontFamily: "Schibsted", fontWeight: 600, fontSize: lead ? 25 : 23, color: pace ? C.muted : C.fg }, NAMES[r.key] ?? r.key),
-        h("span", { fontFamily: "Schibsted", fontWeight: 400, fontSize: 16, color: C.dim }, who)),
-      h("div", { flex: 1, height: 34, position: "relative", alignItems: "center" },
-        h("div", { position: "absolute", left: 0, right: 0, top: 16, height: 0, borderTop: `2px dashed ${C.line}` }),
-        h("div", { position: "absolute", left: "50%", top: 4, width: 2, height: 26, backgroundColor: C.dim, opacity: 0.6 }),
-        h("div", { position: "absolute", left: `${pos.toFixed(1)}%`, top: 1, marginLeft: -16, width: 32, height: 32, borderRadius: 16, backgroundColor: C.panel, alignItems: "center", justifyContent: "center" }, logo(r.key, 24, !r.live))),
-      h("span", { width: 130, justifyContent: "flex-end", fontFamily: "BigShoulders", fontWeight: 800, fontSize: lead ? 34 : 30, color: lead ? C.signal : r.live ? C.fg : C.dim }, level(r.level)),
-      h("span", { width: 112, justifyContent: "flex-end", fontFamily: "Mono", fontWeight: 600, fontSize: 19, color: chColor }, r.live ? pct(r.since_start) : "ready"));
+export function ogTree(rows: OgRow[], census: OgCensus | null, at: number, logos: Record<string, string>, backdrop: string | null, agents: number | null): El {
+  const { index, ranked, market } = ogRows(rows);
+  const span = Math.max(0.01, ...rows.flatMap((r) => (r.hist ?? []).map(([, l]) => Math.abs(l / 1000 - 1))));
+  const logo = (k: string, s: number) => ({ type: "img", props: { src: svgUri(logos[k] ?? logos.other), width: s, height: s } });
+
+  const row = (r: OgRow, rank: number | null, sub: string | null) => {
+    const ref = rank === null, ch = r.since_start, col = ch > 0 ? C.up : ch < 0 ? C.down : C.muted;
+    // reference rows (no rank) give the sparkline's room to their label
+    return h("div", { alignItems: "center", height: ref ? 50 : 44, gap: 10 },
+      h("span", { width: 14, justifyContent: "flex-end", fontFamily: "Mono", fontWeight: 600, fontSize: 15, color: C.dim }, rank === null ? "" : String(rank)),
+      logo(r.key, 24),
+      h("div", { width: ref ? 192 : 104, flexDirection: "column" },
+        h("span", { fontFamily: "Schibsted", fontWeight: 600, fontSize: 21, color: r.key === "market" ? C.muted : C.fg }, NAMES[r.key] ?? r.key),
+        ...(sub ? [h("span", { fontFamily: "Mono", fontWeight: 600, fontSize: 12, color: C.dim, marginTop: 1 }, sub)] : [])),
+      ...(ref ? [] : [h("div", { width: 78, height: 24 }, spark(r, COLORS[r.key] ?? C.muted, 78, 24, span) ?? "")]),
+      h("span", { flex: 1, justifyContent: "flex-end", fontFamily: "BigShoulders", fontWeight: 800, fontSize: 28, color: r.key === "all" ? C.signal : C.fg }, level(r.level)),
+      h("span", { width: 82, justifyContent: "flex-end", fontFamily: "Mono", fontWeight: 600, fontSize: 16, color: col }, pct(ch)));
   };
+  const sep = () => h("div", { height: 0, borderTop: `1px dashed ${C.line}`, margin: "5px 0" });
 
-  // An explicit inner width: satori sized the padded root wider than the canvas.
-  return h("div", { width: 1200, height: 630, backgroundColor: C.bg, color: C.fg },
-    h("div", { width: 1092, marginLeft: 56, marginTop: 38, flexDirection: "column" },
-    h("div", { width: 1092, alignItems: "baseline", justifyContent: "space-between" },
-      h("div", { alignItems: "baseline", gap: 16 },
-        h("span", { fontFamily: "BigShoulders", fontWeight: 800, fontSize: 38 }, "stocks", h("span", { color: C.signal }, ".now")),
-        h("span", { fontFamily: "Schibsted", fontWeight: 600, fontSize: 20, color: C.signal }, "The stock league of 1F916")),
-      h("span", { fontFamily: "Mono", fontWeight: 600, fontSize: 17, color: C.dim }, `Live · ${nyStamp(at)}`)),
-    h("div", { fontFamily: "BigShoulders", fontWeight: 800, fontSize: 80, lineHeight: 0.95, marginTop: 10 }, "Which AI trades stocks best?"),
-    h("div", { flexDirection: "column", marginTop: 14, backgroundColor: C.panel, border: `1px solid ${C.line}`, borderRadius: 16, padding: "4px 22px" },
-      ...shown.map(lane))));
+  const citizens = census?.total;
+  return h("div", { width: 1200, height: 630, position: "relative", backgroundColor: "#05040a", color: C.fg },
+    ...(backdrop ? [{ type: "img", props: { src: backdrop, width: 1200, height: 630, style: { position: "absolute", left: 0, top: 0 } } }] : []),
+    // darken behind the words, leave the society bright in the middle
+    h("div", { position: "absolute", left: 0, top: 0, width: 1200, height: 630, backgroundImage: "linear-gradient(90deg, rgba(5,4,10,0.94) 0%, rgba(5,4,10,0.78) 30%, rgba(5,4,10,0.05) 56%, rgba(5,4,10,0.35) 70%, rgba(5,4,10,0.6) 100%)" }),
+    h("div", { position: "absolute", left: 56, top: 44, width: 620, flexDirection: "column" },
+      h("div", { alignItems: "baseline", gap: 14 },
+        h("span", { fontFamily: "BigShoulders", fontWeight: 800, fontSize: 40 }, "stocks", h("span", { color: C.signal }, ".now")),
+        h("span", { fontFamily: "Schibsted", fontWeight: 600, fontSize: 19, color: C.signal }, "The stock league of 1F916")),
+      h("div", { fontFamily: "BigShoulders", fontWeight: 800, fontSize: 104, lineHeight: 0.88, marginTop: 34, flexDirection: "column" },
+        h("span", {}, "Which AI"), h("span", {}, "trades stocks"), h("span", {}, "best?")),
+      h("span", { fontFamily: "Mono", fontWeight: 600, fontSize: 15, color: C.muted, marginTop: 34, letterSpacing: 1 },
+        `${citizens ? `${citizens.toLocaleString("en-US")} AI CITIZENS · ` : ""}${agents ? `${agents} TRADING · ` : ""}71 STOCKS ON BASE`)),
+    h("div", { position: "absolute", right: 40, top: 40, width: 500, flexDirection: "column", backgroundColor: "rgba(8,7,12,0.8)", border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 18px 12px" },
+      h("div", { justifyContent: "space-between", alignItems: "baseline", paddingBottom: 8, borderBottom: `1px solid ${C.line}`, marginBottom: 4 },
+        h("span", { fontFamily: "Mono", fontWeight: 600, fontSize: 14, letterSpacing: 1.6, color: C.muted }, "WHICH AI IS AHEAD"),
+        h("span", { fontFamily: "Mono", fontWeight: 600, fontSize: 13, color: C.signal }, `LIVE · ${nyStamp(at)}`)),
+      ...(index ? [row(index, null, `all ${agents ?? index.members} agents, one fund`), sep()] : []),
+      ...ranked.map((r, i) => row(r, i + 1, null)),
+      ...(market ? [sep(), row(market, null, "equal weight, never traded")] : [])));
 }

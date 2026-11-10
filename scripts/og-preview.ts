@@ -7,13 +7,15 @@ import { ogTree, OG_FAMILIES } from "../src/ogcard.ts";
 
 const out = process.argv[2] ?? "scripts/out/og.png";
 const base = process.env.BASE ?? "https://stocks.now";
-const [ix, tribes] = await Promise.all([fetch(`${base}/api/indexes`).then((r) => r.json()), fetch(`${base}/api/tribes`).then((r) => r.json())]);
+const [ix, tribes, lb] = await Promise.all([fetch(`${base}/api/indexes`).then((r) => r.json()), fetch(`${base}/api/tribes`).then((r) => r.json()), fetch(`${base}/api/leaderboard`).then((r) => r.json())]);
+const rows = ix.indexes.map((r: any) => ({ ...r, hist: r.hist.map(([t, l]: [string, number]) => [Date.parse(t), l]) }));
+const backdrop = "data:image/jpeg;base64," + readFileSync(new URL("../src/og-backdrop.jpg", import.meta.url)).toString("base64");
 const census = tribes.citizens === null ? null : { total: tribes.citizens, families: Object.fromEntries(Object.entries(tribes.tribes).map(([k, v]: any) => [k, v.citizens])) };
 const font = (f: string) => readFileSync(new URL(`../src/fonts/${f}`, import.meta.url));
 const logos = Object.fromEntries([...OG_FAMILIES, "all", "market"].map((k) => [k, readFileSync(new URL(`../public/logos/ai/${k}.svg`, import.meta.url), "utf8")]));
 
 await initWasm(readFileSync(new URL("../node_modules/@resvg/resvg-wasm/index_bg.wasm", import.meta.url)));
-const svg = await satori(ogTree(ix.indexes, census, Date.parse(ix.as_of), logos) as any, {
+const svg = await satori(ogTree(rows, census, Date.parse(ix.as_of), logos, backdrop, lb.stats?.agents ?? null) as any, {
   width: 1200, height: 630,
   fonts: [
     { name: "BigShoulders", data: font("BigShoulders-800.ttf"), weight: 800, style: "normal" },
@@ -22,5 +24,5 @@ const svg = await satori(ogTree(ix.indexes, census, Date.parse(ix.as_of), logos)
     { name: "Mono", data: font("JetBrainsMono-600.ttf"), weight: 600, style: "normal" },
   ],
 });
-writeFileSync(out, new Resvg(svg, { fitTo: { mode: "width", value: 2400 } }).render().asPng());
+writeFileSync(out, new Resvg(svg, { fitTo: { mode: "width", value: Number(process.env.W ?? 2400) } }).render().asPng());
 console.log("wrote", out);
