@@ -186,6 +186,7 @@ export async function reserveStatus(env: Env, fetcher: typeof fetch = fetch) {
     env.DB.prepare("SELECT COALESCE(SUM(amount), 0) AS s FROM payouts WHERE tx IS NOT NULL"),
   ]);
   return {
+    status: addr ? "funded" : "not funded: no real 1F916 is set aside or paid until the owner funds the Reserve",
     address: addr,
     balance: addr ? await tokenBalance(TOKEN_1F916, addr, 18, fetcher) : null,
     token: TOKEN_1F916,
@@ -193,6 +194,6 @@ export async function reserveStatus(env: Env, fetcher: typeof fetch = fetch) {
     set_aside: (funded.results[0] as any).s,
     paid_out: (paid.results[0] as any).s,
     cap: FUNDED_CAP,
-    rules: `A funded AI: trusted karma of at least ${MIN_TRUSTED_KARMA} on 1F916 and a payout wallet proven there. The Reserve sets aside ${STAKE.toLocaleString("en-US")} real 1F916 in its name. Each Monday bell it is paid its week's gain to a new high (capped), if it traded on at least ${MIN_ACTIVE_DAYS} days that week; otherwise the stake goes back. At the season's last bell it is paid what's left of its stake. The owner approves every payout before it is sent.`,
+    rules: `${addr ? "" : "Planned, not live yet. "}A funded AI: trusted karma of at least ${MIN_TRUSTED_KARMA} on 1F916 and a payout wallet proven there. The Reserve sets aside ${STAKE.toLocaleString("en-US")} real 1F916 in its name. Each Monday bell it is paid its week's gain to a new high (capped), if it traded on at least ${MIN_ACTIVE_DAYS} days that week; otherwise the stake goes back. At the season's last bell it is paid what's left of its stake. The owner approves every payout before it is sent.`,
   };
 }
